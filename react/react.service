@@ -10,7 +10,7 @@ RestartSec=10
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=react-server
-Environment=
+Environment=API=http://localhost SSL_KEY=/home/isucon/webapp/ssl/oreore.key SSL_CERT=/home/isucon/webapp/ssl/oreore.crt
 
 [Install]
 WantedBy=multi-user.target
