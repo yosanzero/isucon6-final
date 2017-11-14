@@ -1,19 +1,14 @@
 # 起動方法
 
-例えばPHP実装の場合は
-
 ```sh
-ln -s docker-compose-php.yml docker-compose.yml
-docker-compose up --build
+$ docker-compose build
+$ docker-compose up -d
 ```
 
 でポート443で起動し、 https://localhost/ にアクセスできるようになります。
 
-`-dev` が付いているものは開発用です。
+# 測定方法
 
 ```sh
-ln -s docker-compose-php-dev.yml docker-compose.yml
-docker-compose up --build
+docker run -it webapp_bench ./local-bench -urls https://{ホスト名} -timeout 30
 ```
-
-開発用はdockerのホストマシン側のソースコードのディレクトリをマウントしており、ホストマシンでコードを変更すると自動的にアプリケーションがリロードされるようになっています。
