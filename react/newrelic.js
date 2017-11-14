@@ -9,7 +9,7 @@ exports.config = {
   /**
    * Array of application names.
    */
-  app_name: ['ISUCON6-FINAL-NODEJS'],
+  app_name: ['ISUCON6-FINAL-REACT'],
   /**
    * Your New Relic license key.
    */

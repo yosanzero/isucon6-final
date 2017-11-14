@@ -11,6 +11,7 @@ import AsyncProps, { loadPropsOnServer } from 'async-props';
 import fetchJson from './util/fetch-json';
 import proxy from 'http-proxy-middleware';
 import Canvas from './components/Canvas';
+import newrelic from 'newrelic';
 
 // for material-ui https://www.npmjs.com/package/material-ui
 import injectTapEventPlugin from 'react-tap-event-plugin';
