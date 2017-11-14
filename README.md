@@ -1,16 +1,14 @@
-## ISUCON6 FINAL EXERCISE
+# 起動方法
 
-### HOST
-
-ec2-13-114-142-226.ap-northeast-1.compute.amazonaws.com
-
-### HOW TO BUILD AND UP
-
-```
-$ cd /home/isucon/webapp
+```sh
 $ docker-compose build
 $ docker-compose up -d
-$ docker-compose logs
 ```
 
-https://ec2-13-114-142-226.ap-northeast-1.compute.amazonaws.com/
+でポート443で起動し、 https://localhost/ にアクセスできるようになります。
+
+# 測定方法
+
+```sh
+docker run -it webapp_bench ./local-bench -urls https://{ホスト名} -timeout 30
+```
