@@ -9,6 +9,8 @@ import json from 'koa-json';
 
 import mysql from 'promise-mysql';
 
+import newrelic from 'newrelic';
+
 import sse from './sse';
 
 const app = new Koa();
