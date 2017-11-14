@@ -1,0 +1,16 @@
+[Unit]
+Description=react server
+
+[Service]
+WorkingDirectory=/home/isucon/webapp/react
+Type=simple
+ExecStart=/usr/bin/node build/server.js
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=react-server
+Environment=
+
+[Install]
+WantedBy=multi-user.target

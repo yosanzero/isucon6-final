@@ -1,0 +1,16 @@
+[Unit]
+Description=node server
+
+[Service]
+WorkingDirectory=/home/isucon/webapp/nodejs
+Type=simple
+ExecStart=/usr/bin/npm bin/run
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=node-server
+Environment=
+
+[Install]
+WantedBy=multi-user.target
