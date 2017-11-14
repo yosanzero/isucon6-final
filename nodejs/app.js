@@ -1,4 +1,5 @@
 'use strict';
+import newrelic from 'newrelic'
 import Koa from 'koa';
 import Router from 'koa-router';
 
@@ -8,8 +9,6 @@ import bodyparser from 'koa-bodyparser';
 import json from 'koa-json';
 
 import mysql from 'promise-mysql';
-
-import newrelic from 'newrelic';
 
 import sse from './sse';
 
