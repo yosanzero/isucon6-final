@@ -1,23 +1,19 @@
-## ISUCON6 FINAL EXERCISE
+# 起動方法
 
-### HOST
+例えばPHP実装の場合は
 
-ec2-13-114-142-226.ap-northeast-1.compute.amazonaws.com
-
-### HOW TO BUILD AND UP
-
-```
-$ cd /home/isucon/webapp
-$ docker-compose build
-$ docker-compose up -d
-$ docker-compose logs
+```sh
+ln -s docker-compose-php.yml docker-compose.yml
+docker-compose up --build
 ```
 
-https://ec2-13-114-142-226.ap-northeast-1.compute.amazonaws.com/
+でポート443で起動し、 https://localhost/ にアクセスできるようになります。
 
+`-dev` が付いているものは開発用です。
 
-### BENCH
-
+```sh
+ln -s docker-compose-php-dev.yml docker-compose.yml
+docker-compose up --build
 ```
-$ docker run -it bench ./local-bench -urls https://ec2-13-114-142-226.ap-northeast-1.compute.amazonaws.com/ -timeout 30
-```
+
+開発用はdockerのホストマシン側のソースコードのディレクトリをマウントしており、ホストマシンでコードを変更すると自動的にアプリケーションがリロードされるようになっています。
