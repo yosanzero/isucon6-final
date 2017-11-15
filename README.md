@@ -1,11 +1,12 @@
-# 起動方法
+# デプロイ方法
+
+ローカルから
 
 ```sh
-$ docker-compose build
-$ docker-compose up -d
+$ /bin/bash restart-all-from-local.sh
 ```
 
-でポート443で起動し、 https://localhost/ にアクセスできるようになります。
+で、gitのコードをpullしてデプロイ
 
 # 測定方法
 
