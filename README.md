@@ -12,7 +12,10 @@ $ /bin/bash restart-all-from-local.sh
 
 ```sh
 $ (cd bench && docker build -t webapp_bench .)
-$ docker run -it webapp_bench ./local-bench -urls https://{ホスト名} -timeout 30
+Docker版
+$ docker run -it webapp_bench ./local-bench -urls ec2-13-114-142-226.ap-northeast-1.compute.amazonaws.com -timeout 30
+Dockerなし版
+$ docker run -it webapp_bench ./local-bench -urls ec2-54-250-246-146.ap-northeast-1.compute.amazonaws.com -timeout 30
 ```
 
 でいけるはず
