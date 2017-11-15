@@ -1,15 +1,18 @@
 # デプロイ方法
 
-ローカルから
-
 ```sh
 $ /bin/bash restart-all-from-local.sh
 ```
 
-で、gitのコードをpullしてデプロイ
+でポート443で起動し、 https://localhost/ にアクセスできるようになります。
 
 # 測定方法
 
+ローカルから
+
 ```sh
-docker run -it webapp_bench ./local-bench -urls https://{ホスト名} -timeout 30
+$ (cd bench && docker build -t webapp_bench .)
+$ docker run -it webapp_bench ./local-bench -urls https://{ホスト名} -timeout 30
 ```
+
+でいけるはず
