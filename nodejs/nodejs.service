@@ -4,7 +4,7 @@ Description=node server
 [Service]
 WorkingDirectory=/home/isucon/webapp/nodejs
 Type=simple
-ExecStart=/usr/bin/npm bin/run
+ExecStart=/usr/bin/npm bin/start
 Restart=always
 RestartSec=10
 StandardOutput=syslog
