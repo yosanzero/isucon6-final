@@ -22,7 +22,7 @@ services:
       - mysql
     environment:
       ISUCON_ENV: production
-      PORT: 80
+      PORT: 8081
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_USER: isucon
@@ -36,6 +36,6 @@ services:
     links:
       - nodejs
     environment:
-      API: http://nodejs:80
+      API: http://nodejs:8081
     ports:
-      - "443:443"
+      - "8080:8080"
