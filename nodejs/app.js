@@ -94,8 +94,8 @@ const checkToken = async (dbh, csrfToken) => {
 };
 
 const getStrokePoints = async (dbh, strokeIds) => {
-  const sql = 'SELECT `id`, `stroke_id`, `x`, `y` FROM `points` WHERE `stroke_id` IN ? ORDER BY `id` ASC';
-  return await selectAll(dbh, sql, [strokeIds]);
+  const sql = 'SELECT `id`, `stroke_id`, `x`, `y` FROM `points` WHERE `stroke_id` IN (?) ORDER BY `id` ASC';
+  return await selectAll(dbh, sql, [strokeIds.join(',')]);
 };
 
 const getStrokes = async (dbh, roomId, greaterThanId) => {
@@ -251,7 +251,7 @@ router.get('/api/rooms/:id', async (ctx, next) => {
     if (!pointsBuffer[point.stroke_id]) {
       pointsBuffer[point.stroke_id] = [];
     }
-    pointsBuffer[point.stroke_id].append(point);
+    pointsBuffer[point.stroke_id].push(point);
   }
   
   for (const stroke of strokes) {
@@ -325,7 +325,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
           if (!pointsBuffer[point.stroke_id]) {
             pointsBuffer[point.stroke_id] = [];
           }
-          pointsBuffer[point.stroke_id].append(point);
+          pointsBuffer[point.stroke_id].push(point);
         }
         
         for (const stroke of strokes) {
