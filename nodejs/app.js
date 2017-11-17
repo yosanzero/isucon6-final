@@ -105,13 +105,8 @@ const getStrokes = async (dbh, roomId, greaterThanId) => {
 };
 
 const getRoom = async (dbh, roomId) => {
-  const sql = 'SELECT `id`, `name`, `canvas_width`, `canvas_height`, `stroke_count`, `created_at` FROM `rooms` WHERE `id` = ?';
+  const sql = 'SELECT `id`, `name`, `canvas_width`, `canvas_height`, `created_at` FROM `rooms` WHERE `id` = ?';
   return await selectOne(dbh, sql, [roomId]);
-};
-
-const getRooms = async (dbh) => {
-  const sql = 'SELECT `id`, `name`, `canvas_width`, `canvas_height`, `stroke_count`, `created_at` FROM `rooms` ORDER BY `stroke_count` DESC LIMIT 100';
-  return await selectAll(dbh, sql);
 };
 
 const getWatcherCount = async (dbh, roomId) => {
@@ -169,7 +164,15 @@ router.post('/api/csrf_token', async (ctx, next) => {
 
 router.get('/api/rooms', async (ctx, next) => {
   const dbh = getDBH(ctx);
-  const rooms = await getRooms(dbh);
+  const sql = 'SELECT `room_id`, MAX(`id`) AS `max_id` FROM `strokes` GROUP BY `room_id` ORDER BY `max_id` DESC LIMIT 100';
+  const results = await selectAll(dbh, sql);
+  const rooms = [];
+  for (const result of results) {
+    const room = await getRoom(dbh, result['room_id']);
+    const strokes = await getStrokes(dbh, room['id'], 0);
+    room['stroke_count'] = strokes.length;
+    rooms.push(room);
+  }
   ctx.body = {
     rooms: rooms.map(typeCastRoomData)
   };
@@ -396,8 +399,9 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
     };
     return;
   }
-  
-  const strokeCount = room.stroke_count;
+
+  const strokes = await getStrokes(dbh, room.id, 0);
+  const strokeCount = strokes.length;
   // TODO:
   if (strokeCount === 0) {
     const sql = 'SELECT COUNT(*) AS cnt FROM `room_owners` WHERE `room_id` = ? AND `token_id` = ?';
@@ -425,7 +429,6 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
       ctx.request.body.alpha
     ]);
     strokeId = result.insertId;
-    await dbh.query('UPDATE `rooms` SET `stroke_count` = `stroke_count`+1 WHERE `id` = ?', [room.id]);
     sql = 'INSERT INTO `points` (`stroke_id`, `x`, `y`) VALUES (?, ?, ?)';
     for (let point of ctx.request.body.points) {
       await dbh.query(sql, [strokeId, point.x, point.y]);
