@@ -426,7 +426,6 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
     ]);
     strokeId = result.insertId;
     await dbh.query('UPDATE `rooms` SET `stroke_count` = `stroke_count`+1 WHERE `id` = ?', [room.id]);
-    
     sql = 'INSERT INTO `points` (`stroke_id`, `x`, `y`) VALUES (?, ?, ?)';
     for (let point of ctx.request.body.points) {
       await dbh.query(sql, [strokeId, point.x, point.y]);
