@@ -80,11 +80,12 @@ const typeCastRoomData = (data) => {
   };
 };
 
-class TokenException {};
+class TokenException {
+};
 
 const checkToken = async (dbh, csrfToken) => {
   let sql = 'SELECT `id`, `csrf_token`, `created_at` FROM `tokens`';
-  sql    += ' WHERE `csrf_token` = ? AND `created_at` > CURRENT_TIMESTAMP(6) - INTERVAL 1 DAY';
+  sql += ' WHERE `csrf_token` = ? AND `created_at` > CURRENT_TIMESTAMP(6) - INTERVAL 1 DAY';
   const token = await selectOne(dbh, sql, [csrfToken]);
   if (typeof token === 'undefined') {
     throw new TokenException();
@@ -92,14 +93,14 @@ const checkToken = async (dbh, csrfToken) => {
   return token;
 };
 
-const getStrokePoints = async (dbh, strokeId) => {
-  const sql = 'SELECT `id`, `stroke_id`, `x`, `y` FROM `points` WHERE `stroke_id` = ? ORDER BY `id` ASC';
-  return await selectAll(dbh, sql, [strokeId]);
+const getStrokePoints = async (dbh, strokeIds) => {
+  const sql = 'SELECT `id`, `stroke_id`, `x`, `y` FROM `points` WHERE `stroke_id` IN ? ORDER BY `id` ASC';
+  return await selectAll(dbh, sql, [strokeIds]);
 };
 
 const getStrokes = async (dbh, roomId, greaterThanId) => {
   let sql = 'SELECT `id`, `room_id`, `width`, `red`, `green`, `blue`, `alpha`, `created_at` FROM `strokes`';
-  sql +=      ' WHERE `room_id` = ? AND `id` > ? ORDER BY `id` ASC';
+  sql += ' WHERE `room_id` = ? AND `id` > ? ORDER BY `id` ASC';
   return await selectAll(dbh, sql, [roomId, greaterThanId]);
 };
 
@@ -115,14 +116,14 @@ const getRooms = async (dbh) => {
 
 const getWatcherCount = async (dbh, roomId) => {
   let sql = 'SELECT COUNT(*) AS `watcher_count` FROM `room_watchers`';
-  sql +=    ' WHERE `room_id` = ? AND `updated_at` > CURRENT_TIMESTAMP(6) - INTERVAL 3 SECOND';
+  sql += ' WHERE `room_id` = ? AND `updated_at` > CURRENT_TIMESTAMP(6) - INTERVAL 3 SECOND';
   const result = await selectOne(dbh, sql, [roomId]);
   return result.watcher_count;
 };
 
 const updateRoomWatcher = async (dbh, roomId, tokenId) => {
   let sql = 'INSERT INTO `room_watchers` (`room_id`, `token_id`) VALUES (?, ?)';
-  sql +=    'ON DUPLICATE KEY UPDATE `updated_at` = CURRENT_TIMESTAMP(6)';
+  sql += 'ON DUPLICATE KEY UPDATE `updated_at` = CURRENT_TIMESTAMP(6)';
   await dbh.query(sql, [roomId, tokenId]);
 };
 
@@ -154,11 +155,11 @@ app.on('error', (err, ctx) => {
 const router = new Router();
 router.post('/api/csrf_token', async (ctx, next) => {
   const dbh = getDBH(ctx);
-
+  
   let sql = 'INSERT INTO `tokens` (`csrf_token`) VALUES (SHA2(CONCAT(RAND(), UUID_SHORT()), 256))';
   const result = await dbh.query(sql);
   const id = result.insertId;
-
+  
   sql = 'SELECT `id`, `csrf_token`, `created_at` FROM `tokens` WHERE id = ?';
   const token = await selectOne(dbh, sql, [id]);
   ctx.body = {
@@ -176,7 +177,7 @@ router.get('/api/rooms', async (ctx, next) => {
 
 router.post('/api/rooms', async (ctx, next) => {
   const dbh = getDBH(ctx);
-
+  
   let token = null;
   try {
     token = await checkToken(dbh, ctx.headers['x-csrf-token']);
@@ -192,7 +193,7 @@ router.post('/api/rooms', async (ctx, next) => {
       throw e;
     }
   }
-
+  
   if (!ctx.request.body.name || !ctx.request.body.canvas_width || !ctx.request.body.canvas_height) {
     ctx.status = 400;
     ctx.body = {
@@ -200,15 +201,15 @@ router.post('/api/rooms', async (ctx, next) => {
     };
     return;
   }
-
+  
   let roomId;
   await dbh.query('BEGIN');
   try {
     let sql = 'INSERT INTO `rooms` (`name`, `canvas_width`, `canvas_height`)';
-    sql +=    ' VALUES (?, ?, ?)';
+    sql += ' VALUES (?, ?, ?)';
     const result = await dbh.query(sql, [ctx.request.body.name, ctx.request.body.canvas_width, ctx.request.body.canvas_height]);
     roomId = result.insertId;
-
+    
     sql = 'INSERT INTO `room_owners` (`room_id`, `token_id`) VALUES (?, ?)';
     await dbh.query(sql, [roomId, token.id]);
     await dbh.query('COMMIT');
@@ -221,7 +222,7 @@ router.post('/api/rooms', async (ctx, next) => {
     };
     return;
   }
-
+  
   const room = await getRoom(dbh, roomId);
   ctx.body = {
     room: typeCastRoomData(room),
@@ -230,7 +231,7 @@ router.post('/api/rooms', async (ctx, next) => {
 
 router.get('/api/rooms/:id', async (ctx, next) => {
   const dbh = getDBH(ctx);
-
+  
   const room = await getRoom(dbh, ctx.params.id);
   if (typeof room === 'undefined') {
     ctx.status = 404;
@@ -239,17 +240,27 @@ router.get('/api/rooms/:id', async (ctx, next) => {
     };
     return;
   }
-
+  
   const strokes = await getStrokes(dbh, room.id, 0);
-  let i = 0;
-  for ( const stroke of strokes ) {
-    strokes[i].points = await getStrokePoints(dbh, stroke.id);
-    i++;
+  const points = await getStrokePoints(dbh, strokes.map((stroke) => {
+    return stroke.id
+  }));
+  
+  let pointsBuffer = {};
+  for (const point of points) {
+    if (!pointsBuffer[point.stroke_id]) {
+      pointsBuffer[point.stroke_id] = [];
+    }
+    pointsBuffer[point.stroke_id].append(point);
   }
-
+  
+  for (const stroke of strokes) {
+    stroke.points = pointsBuffer[stroke.id];
+  }
+  
   room.strokes = strokes;
   room.watcher_count = await getWatcherCount(dbh, room.id);
-
+  
   ctx.body = {
     room: typeCastRoomData(room),
   };
@@ -259,7 +270,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
   ctx.type = 'text/event-stream';
   ctx.req.setTimeout(Number.MAX_VALUE);
   ctx.body = new sse();
-
+  
   const dbh = await getDBH(ctx);
   let token;
   try {
@@ -275,38 +286,51 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
       throw e;
     }
   }
-
+  
   const room = await getRoom(dbh, ctx.params.id);
-  if ( typeof room === 'undefined' ) {
+  if (typeof room === 'undefined') {
     ctx.body.write(
       "event:bad_request\n" +
       'data:この部屋は存在しません\n\n');
     ctx.body.end();
     return;
   }
-
+  
   await updateRoomWatcher(dbh, room.id, token.id);
   let watcherCount = await getWatcherCount(dbh, room.id);
-
+  
   ctx.body.write(
     "retry:500\n\n" +
     "event:watcher_count\n" +
     `data:${watcherCount}\n\n`
   );
-
+  
   let lastStrokeId = 0;
   if (ctx.headers['last-event-id']) {
     lastStrokeId = parseInt(ctx.headers['last-event-id']);
   }
-
+  
   await new Promise((resolve, reject) => {
     let loop = 6;
     const interval = async () => {
       try {
         loop--;
         const strokes = await getStrokes(dbh, room.id, lastStrokeId);
+        const strokes = await getStrokes(dbh, room.id, 0);
+        const points = await getStrokePoints(dbh, strokes.map((stroke) => {
+          return stroke.id
+        }));
+        
+        let pointsBuffer = {};
+        for (const point of points) {
+          if (!pointsBuffer[point.stroke_id]) {
+            pointsBuffer[point.stroke_id] = [];
+          }
+          pointsBuffer[point.stroke_id].append(point);
+        }
+        
         for (const stroke of strokes) {
-          stroke.points = await getStrokePoints(dbh, stroke.id);
+          stroke.points = pointsBuffer[stroke.id];
           ctx.body.write(
             `id:${stroke.id}\n\n` +
             "event:stroke\n" +
@@ -314,7 +338,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
           );
           lastStrokeId = stroke.id;
         }
-
+        
         await updateRoomWatcher(dbh, room.id, token.id);
         const newWatcherCount = await getWatcherCount(dbh, room.id);
         if (newWatcherCount !== watcherCount) {
@@ -324,13 +348,13 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
             `data:${watcherCount}\n\n`
           );
         }
-
-        if ( loop === 0 ) {
+        
+        if (loop === 0) {
           resolve();
         } else {
           intervalId = setTimeout(interval, 500);
         }
-      } catch(e) {
+      } catch (e) {
         console.error(e);
         reject(e);
       }
@@ -342,7 +366,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
 
 router.post('/api/strokes/rooms/:id', async (ctx, next) => {
   const dbh = await getDBH(ctx);
-
+  
   let token;
   try {
     token = await checkToken(dbh, ctx.headers['x-csrf-token']);
@@ -356,7 +380,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
       throw e;
     }
   }
-
+  
   const room = await getRoom(dbh, ctx.params.id);
   if (typeof room === 'undefined') {
     ctx.status = 400;
@@ -365,7 +389,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
     };
     return;
   }
-
+  
   if (!ctx.request.body.width || !ctx.request.body.points) {
     ctx.status = 400;
     ctx.body = {
@@ -373,7 +397,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
     };
     return;
   }
-
+  
   const strokeCount = room.stroke_count;
   // TODO:
   if (strokeCount === 0) {
@@ -387,12 +411,12 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
       return;
     }
   }
-
+  
   await dbh.query('BEGIN');
   let strokeId;
   try {
     let sql = 'INSERT INTO `strokes` (`room_id`, `width`, `red`, `green`, `blue`, `alpha`)';
-    sql +=    'VALUES(?, ?, ?, ?, ?, ?)';
+    sql += 'VALUES(?, ?, ?, ?, ?, ?)';
     const result = await dbh.query(sql, [
       room.id,
       ctx.request.body.width,
@@ -403,7 +427,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
     ]);
     strokeId = result.insertId;
     await dbh.query('UPDATE `rooms` SET `stroke_count` = `stroke_count`+1 WHERE `id` = ?', [room.id]);
-
+    
     sql = 'INSERT INTO `points` (`stroke_id`, `x`, `y`) VALUES (?, ?, ?)';
     for (let point of ctx.request.body.points) {
       await dbh.query(sql, [strokeId, point.x, point.y]);
@@ -417,15 +441,15 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
       error: 'エラーが発生しました。'
     };
   }
-
+  
   let sql = 'SELECT `id`, `room_id`, `width`, `red`, `green`, `blue`, `alpha`, `created_at` FROM `strokes`';
-  sql +=    ' WHERE `id` = ?';
+  sql += ' WHERE `id` = ?';
   const stroke = await selectOne(dbh, sql, [strokeId]);
-  stroke.points = await getStrokePoints(dbh, strokeId);
+  stroke.points = await getStrokePoints(dbh, [strokeId]);
   ctx.body = {
     stroke: typeCastStrokeData(stroke)
   };
-
+  
 });
 
 app.use(router.routes());
