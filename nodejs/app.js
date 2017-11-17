@@ -95,13 +95,18 @@ const checkToken = async (dbh, csrfToken) => {
 
 const getStrokePoints = async (dbh, strokeIds) => {
   const sql = 'SELECT `id`, `stroke_id`, `x`, `y` FROM `points` WHERE `stroke_id` IN (?) ORDER BY `id` ASC';
-  return await selectAll(dbh, sql, [strokeIds.join(',')]);
+  return await selectAll(dbh, sql, [strokeIds]);
 };
 
-const getStrokes = async (dbh, roomId, greaterThanId) => {
+const getStrokes = async (dbh, roomIds, greaterThanId) => {
   let sql = 'SELECT `id`, `room_id`, `width`, `red`, `green`, `blue`, `alpha`, `created_at` FROM `strokes`';
-  sql += ' WHERE `room_id` = ? AND `id` > ? ORDER BY `id` ASC';
-  return await selectAll(dbh, sql, [roomId, greaterThanId]);
+  sql += ' WHERE `room_id` IN (?) AND `id` > ? ORDER BY `id` ASC';
+  return await selectAll(dbh, sql, [roomIds, greaterThanId]);
+};
+
+const getRooms = async (dbh, roomIds) => {
+  const sql = 'SELECT `id`, `name`, `canvas_width`, `canvas_height`, `created_at` FROM `rooms` WHERE `id` IN (?)';
+  return await selectAll(dbh, sql, [roomIds]);
 };
 
 const getRoom = async (dbh, roomId) => {
@@ -166,13 +171,23 @@ router.get('/api/rooms', async (ctx, next) => {
   const dbh = getDBH(ctx);
   const sql = 'SELECT `room_id`, MAX(`id`) AS `max_id` FROM `strokes` GROUP BY `room_id` ORDER BY `max_id` DESC LIMIT 100';
   const results = await selectAll(dbh, sql);
-  const rooms = [];
-  for (const result of results) {
-    const room = await getRoom(dbh, result['room_id']);
-    const strokes = await getStrokes(dbh, room['id'], 0);
-    room['stroke_count'] = strokes.length;
-    rooms.push(room);
+  const roomIds = results.map((result) => { return result['room_id']; });
+  const rooms = await getRooms(dbh, roomIds);
+  const strokes = await getStrokes(dbh, roomIds, 0);
+  
+  const strokesBuffer = {};
+  for (const stroke of strokes) {
+    if (!strokesBuffer[stroke.room_id]) {
+      strokesBuffer[stroke.room_id] = []
+    }
+    strokesBuffer[stroke.room_id].push(stroke);
   }
+  for (const room of rooms) {
+    const strokesOfRoom = strokesBuffer[room.id];
+    room.strokes = strokesOfRoom;
+    room['stroke_count'] = strokesOfRoom.length;
+  }
+  
   ctx.body = {
     rooms: rooms.map(typeCastRoomData)
   };
@@ -244,10 +259,10 @@ router.get('/api/rooms/:id', async (ctx, next) => {
     return;
   }
   
-  const strokes = await getStrokes(dbh, room.id, 0);
-  const points = await getStrokePoints(dbh, strokes.map((stroke) => {
+  const strokes = await getStrokes(dbh, [room.id], 0);
+  const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
     return stroke.id
-  }));
+  })) : [];
   
   let pointsBuffer = {};
   for (const point of points) {
@@ -318,10 +333,10 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
     const interval = async () => {
       try {
         loop--;
-        const strokes = await getStrokes(dbh, room.id, lastStrokeId);
-        const points = await getStrokePoints(dbh, strokes.map((stroke) => {
+        const strokes = await getStrokes(dbh, [room.id], lastStrokeId);
+        const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
           return stroke.id
-        }));
+        })) : [];
         
         let pointsBuffer = {};
         for (const point of points) {
@@ -400,7 +415,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
     return;
   }
 
-  const strokes = await getStrokes(dbh, room.id, 0);
+  const strokes = await getStrokes(dbh, [room.id], 0);
   const strokeCount = strokes.length;
   // TODO:
   if (strokeCount === 0) {
