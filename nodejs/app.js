@@ -316,7 +316,6 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
       try {
         loop--;
         const strokes = await getStrokes(dbh, room.id, lastStrokeId);
-        const strokes = await getStrokes(dbh, room.id, 0);
         const points = await getStrokePoints(dbh, strokes.map((stroke) => {
           return stroke.id
         }));
