@@ -4,6 +4,7 @@ cd /home/isucon/webapp
 git fetch origin
 git reset --hard origin/master
 (cd nodejs && npm install && npm cache clean)
+(cd nodejs && node init.js)
 (cd react && npm install && npm cache clean && NODE_ENV=production npm run build)
 sudo cp etc/nginx/nginx.conf /etc/nginx/nginx.conf
 sudo cp etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf

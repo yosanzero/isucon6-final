@@ -135,10 +135,6 @@ const updateRoomWatcher = async (dbh, roomId, tokenId) => {
 const getJammedRoom = async (dbh, roomId) => {
   const room = await getRoom(dbh, roomId);
   if (typeof room === 'undefined') {
-    ctx.status = 404;
-    ctx.body = {
-      error: 'この部屋は存在しません。',
-    };
     return;
   }
   
@@ -392,11 +388,12 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
 });
 
 const writeRoomSvg = (room) => {
+  const json = typeCastRoomData(room);
   const svg = renderToStaticMarkup(
     React.createElement(Canvas, {
-      width: room.canvas_width,
-      height: room.canvas_height,
-      strokes: room.strokes
+      width: json.canvas_width,
+      height: json.canvas_height,
+      strokes: json.strokes
     })
   );
   const body =
@@ -405,7 +402,7 @@ const writeRoomSvg = (room) => {
     svg;
   
   new Promise((resolve, reject) => {
-    fs.writeFile(path.join(__dirname, './public/img/' + room.id), body, (err) => {
+    fs.writeFile(path.join(__dirname, './public/img/' + json.id), body, (err) => {
       if (err) reject(err);
       else resolve();
     });
@@ -490,7 +487,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
   }
   
   const jammedRoom = await getJammedRoom(dbh, ctx.params.id);
-  await writeRoomSvg(typeCastRoomData(jammedRoom));
+  await writeRoomSvg(jammedRoom);
   
   let sql = 'SELECT `id`, `room_id`, `width`, `red`, `green`, `blue`, `alpha`, `created_at` FROM `strokes`';
   sql += ' WHERE `id` = ?';
