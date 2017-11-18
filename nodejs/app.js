@@ -405,7 +405,7 @@ const writeRoomSvg = (room) => {
     svg;
   
   new Promise((resolve, reject) => {
-    fs.writeFile(path.join(__dirname, './public/' + room.id), body, (err) => {
+    fs.writeFile(path.join(__dirname, './public/img/' + room.id), body, (err) => {
       if (err) reject(err);
       else resolve();
     });
