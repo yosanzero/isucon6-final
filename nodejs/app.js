@@ -2,6 +2,11 @@
 import newrelic from 'newrelic'
 import Koa from 'koa';
 import Router from 'koa-router';
+import path from 'path';
+import fs from 'fs';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import Canvas from './components/Canvas';
 
 import convert from 'koa-convert';
 import logger from 'koa-logger';
@@ -127,6 +132,39 @@ const updateRoomWatcher = async (dbh, roomId, tokenId) => {
   await dbh.query(sql, [roomId, tokenId]);
 };
 
+const getJammedRoom = async (dbh, roomId) => {
+  const room = await getRoom(dbh, roomId);
+  if (typeof room === 'undefined') {
+    ctx.status = 404;
+    ctx.body = {
+      error: 'この部屋は存在しません。',
+    };
+    return;
+  }
+  
+  const strokes = await getStrokes(dbh, [room.id], 0);
+  const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
+    return stroke.id
+  })) : [];
+  
+  let pointsBuffer = {};
+  for (const point of points) {
+    if (!pointsBuffer[point.stroke_id]) {
+      pointsBuffer[point.stroke_id] = [];
+    }
+    pointsBuffer[point.stroke_id].push(point);
+  }
+  
+  for (const stroke of strokes) {
+    stroke.points = pointsBuffer[stroke.id];
+  }
+  
+  room.strokes = strokes;
+  room.watcher_count = await getWatcherCount(dbh, room.id);
+  
+  return room;
+};
+
 app.use(convert(bodyparser()));
 app.use(convert(json()));
 app.use(convert(logger()));
@@ -242,6 +280,7 @@ router.post('/api/rooms', async (ctx, next) => {
   }
   
   const room = await getRoom(dbh, roomId);
+  
   ctx.body = {
     room: typeCastRoomData(room),
   };
@@ -249,36 +288,7 @@ router.post('/api/rooms', async (ctx, next) => {
 
 router.get('/api/rooms/:id', async (ctx, next) => {
   const dbh = getDBH(ctx);
-  
-  const room = await getRoom(dbh, ctx.params.id);
-  if (typeof room === 'undefined') {
-    ctx.status = 404;
-    ctx.body = {
-      error: 'この部屋は存在しません。',
-    };
-    return;
-  }
-  
-  const strokes = await getStrokes(dbh, [room.id], 0);
-  const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
-    return stroke.id
-  })) : [];
-  
-  let pointsBuffer = {};
-  for (const point of points) {
-    if (!pointsBuffer[point.stroke_id]) {
-      pointsBuffer[point.stroke_id] = [];
-    }
-    pointsBuffer[point.stroke_id].push(point);
-  }
-  
-  for (const stroke of strokes) {
-    stroke.points = pointsBuffer[stroke.id];
-  }
-  
-  room.strokes = strokes;
-  room.watcher_count = await getWatcherCount(dbh, room.id);
-  
+  const room = await getJammedRoom(dbh, ctx.params.id);
   ctx.body = {
     room: typeCastRoomData(room),
   };
@@ -381,6 +391,27 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
   ctx.body.end();
 });
 
+const writeRoomSvg = (room) => {
+  const svg = renderToStaticMarkup(
+    React.createElement(Canvas, {
+      width: room.canvas_width,
+      height: room.canvas_height,
+      strokes: room.strokes
+    })
+  );
+  const body =
+    '<?xml version="1.0" standalone="no"?>' +
+    '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
+    svg;
+  
+  new Promise((resolve, reject) => {
+    fs.writeFile(path.join(__dirname, './public/' + room.id), body, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+};
+
 router.post('/api/strokes/rooms/:id', async (ctx, next) => {
   const dbh = await getDBH(ctx);
   
@@ -457,6 +488,9 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
       error: 'エラーが発生しました。'
     };
   }
+  
+  const jammedRoom = await getJammedRoom(dbh, ctx.params.id);
+  await writeRoomSvg(typeCastRoomData(jammedRoom));
   
   let sql = 'SELECT `id`, `room_id`, `width`, `red`, `green`, `blue`, `alpha`, `created_at` FROM `strokes`';
   sql += ' WHERE `id` = ?';
