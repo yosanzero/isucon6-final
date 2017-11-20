@@ -1,6 +1,7 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const React = require('react');
 const server = require('react-dom/server');
 const Canvas = require('./components/Canvas');
@@ -130,10 +131,17 @@ const writeRoomSvg = (room) => {
     '<?xml version="1.0" standalone="no"?>' +
     '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
     svg;
-  
+
   new Promise((resolve) => {
     fs.writeFileSync(path.join(__dirname, './public/img/' + json.id), body);
     resolve();
+  });
+
+  new Promise((resolve) => {
+    zlib.gzip(body, (err, binary) => {
+      fs.writeFileSync(path.join(__dirname, './public/img/' + json.id + '.gz'), binary);
+      resolve();
+    });
   });
 };
 

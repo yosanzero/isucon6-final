@@ -1,9 +1,10 @@
 'use strict';
-import newrelic from 'newrelic'
+import 'newrelic'
 import Koa from 'koa';
 import Router from 'koa-router';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'zlib';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Canvas from './components/Canvas';
@@ -406,6 +407,17 @@ const writeRoomSvg = (room) => {
       if (err) reject(err);
       else resolve();
     });
+  });
+
+  new Promise((resolve, reject) => {
+    zlib.gzip(body, (err, binary) => {
+      if (err) reject(err);
+      else
+        fs.writeFile(path.join(__dirname, './public/img/' + json.id + '.gz'), binary, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+    })
   });
 };
 
