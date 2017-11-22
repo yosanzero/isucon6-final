@@ -9,9 +9,13 @@ sudo chmod -R 777 /home/isucon/webapp/react/public/
 (cd react && npm install && npm cache clean && NODE_ENV=production npm run build)
 sudo cp etc/nginx/nginx.conf /etc/nginx/nginx.conf
 sudo cp etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf
+sudo cp nodejs/nodejs.service /etc/systemd/system/
+sudo cp react/react.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl restart mysql
-sudo systemctl restart nodejs.service
-sudo systemctl restart react.service
-sudo systemctl restart nginx.service
-echo > /var/log/mysql/slow.log
-echo > /var/log/nginx/access.log
+sudo systemctl restart nodejs
+sudo systemctl restart react
+sudo systemctl restart nginx
+sudo systemctl restart redis-server
+echo "" | sudo tee /var/log/mysql/slow.log
+echo "" | sudo tee /var/log/nginx/access.log
