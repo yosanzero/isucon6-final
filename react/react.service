@@ -10,7 +10,7 @@ RestartSec=10
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=react-server
-Environment=PORT=8080 API=http://localhost:8081
+Environment=PORT=8080 API=http://localhost:8081 MYSQL_HOST=172.29.2.63
 
 [Install]
 WantedBy=multi-user.target
