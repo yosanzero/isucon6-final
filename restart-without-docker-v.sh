@@ -13,3 +13,5 @@ sudo systemctl restart mysql
 sudo systemctl restart nodejs.service
 sudo systemctl restart react.service
 sudo systemctl restart nginx.service
+echo > /var/log/mysql/slow.log
+echo > /var/log/nginx/access.log
