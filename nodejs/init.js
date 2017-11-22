@@ -32,7 +32,7 @@ const getAllRooms = (dbh) => {
   let rooms;
   let strokes;
   let points;
-  
+
   return Promise.all([
     selectAll(dbh, 'SELECT `id`, `name`, `canvas_width`, `canvas_height`, `created_at` FROM `rooms`')
       .then((v) => {
@@ -132,17 +132,18 @@ const writeRoomSvg = (room) => {
     '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
     svg;
 
-  new Promise((resolve) => {
-    fs.writeFileSync(path.join(__dirname, './public/img/' + json.id), body);
-    resolve();
-  });
-
-  new Promise((resolve) => {
-    zlib.gzip(body, (err, binary) => {
-      fs.writeFileSync(path.join(__dirname, './public/img/' + json.id + '.gz'), binary);
+  return Promise.all([
+    new Promise((resolve) => {
+      fs.writeFileSync(path.join(__dirname, '../react/public/img/' + json.id), body);
       resolve();
-    });
-  });
+    }),
+    new Promise((resolve) => {
+      zlib.gzip(body, (err, binary) => {
+        fs.writeFileSync(path.join(__dirname, '../react/public/img/' + json.id + '.gz'), binary);
+        resolve();
+      });
+    })
+  ]);
 };
 
 const dbh = getDBH();

@@ -138,12 +138,12 @@ const getJammedRoom = async (dbh, roomId) => {
   if (typeof room === 'undefined') {
     return;
   }
-  
+
   const strokes = await getStrokes(dbh, [room.id], 0);
   const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
     return stroke.id
   })) : [];
-  
+
   let pointsBuffer = {};
   for (const point of points) {
     if (!pointsBuffer[point.stroke_id]) {
@@ -151,14 +151,14 @@ const getJammedRoom = async (dbh, roomId) => {
     }
     pointsBuffer[point.stroke_id].push(point);
   }
-  
+
   for (const stroke of strokes) {
     stroke.points = pointsBuffer[stroke.id];
   }
-  
+
   room.strokes = strokes;
   room.watcher_count = await getWatcherCount(dbh, room.id);
-  
+
   return room;
 };
 
@@ -190,11 +190,11 @@ app.on('error', (err, ctx) => {
 const router = new Router();
 router.post('/api/csrf_token', async (ctx, next) => {
   const dbh = getDBH(ctx);
-  
+
   let sql = 'INSERT INTO `tokens` (`csrf_token`) VALUES (SHA2(CONCAT(RAND(), UUID_SHORT()), 256))';
   const result = await dbh.query(sql);
   const id = result.insertId;
-  
+
   sql = 'SELECT `id`, `csrf_token`, `created_at` FROM `tokens` WHERE id = ?';
   const token = await selectOne(dbh, sql, [id]);
   ctx.body = {
@@ -209,7 +209,7 @@ router.get('/api/rooms', async (ctx, next) => {
   const roomIds = results.map((result) => { return result['room_id']; });
   const rooms = await getRooms(dbh, roomIds);
   const strokes = await getStrokes(dbh, roomIds, 0);
-  
+
   const strokesBuffer = {};
   for (const stroke of strokes) {
     if (!strokesBuffer[stroke.room_id]) {
@@ -222,7 +222,7 @@ router.get('/api/rooms', async (ctx, next) => {
     room.strokes = strokesOfRoom;
     room['stroke_count'] = strokesOfRoom.length;
   }
-  
+
   ctx.body = {
     rooms: rooms.map(typeCastRoomData)
   };
@@ -230,7 +230,7 @@ router.get('/api/rooms', async (ctx, next) => {
 
 router.post('/api/rooms', async (ctx, next) => {
   const dbh = getDBH(ctx);
-  
+
   let token = null;
   try {
     token = await checkToken(dbh, ctx.headers['x-csrf-token']);
@@ -246,7 +246,7 @@ router.post('/api/rooms', async (ctx, next) => {
       throw e;
     }
   }
-  
+
   if (!ctx.request.body.name || !ctx.request.body.canvas_width || !ctx.request.body.canvas_height) {
     ctx.status = 400;
     ctx.body = {
@@ -254,7 +254,7 @@ router.post('/api/rooms', async (ctx, next) => {
     };
     return;
   }
-  
+
   let roomId;
   await dbh.query('BEGIN');
   try {
@@ -262,7 +262,7 @@ router.post('/api/rooms', async (ctx, next) => {
     sql += ' VALUES (?, ?, ?)';
     const result = await dbh.query(sql, [ctx.request.body.name, ctx.request.body.canvas_width, ctx.request.body.canvas_height]);
     roomId = result.insertId;
-    
+
     sql = 'INSERT INTO `room_owners` (`room_id`, `token_id`) VALUES (?, ?)';
     await dbh.query(sql, [roomId, token.id]);
     await dbh.query('COMMIT');
@@ -275,9 +275,9 @@ router.post('/api/rooms', async (ctx, next) => {
     };
     return;
   }
-  
+
   const room = await getRoom(dbh, roomId);
-  
+
   ctx.body = {
     room: typeCastRoomData(room),
   };
@@ -295,7 +295,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
   ctx.type = 'text/event-stream';
   ctx.req.setTimeout(Number.MAX_VALUE);
   ctx.body = new sse();
-  
+
   const dbh = await getDBH(ctx);
   let token;
   try {
@@ -311,7 +311,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
       throw e;
     }
   }
-  
+
   const room = await getRoom(dbh, ctx.params.id);
   if (typeof room === 'undefined') {
     ctx.body.write(
@@ -320,21 +320,21 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
     ctx.body.end();
     return;
   }
-  
+
   await updateRoomWatcher(dbh, room.id, token.id);
   let watcherCount = await getWatcherCount(dbh, room.id);
-  
+
   ctx.body.write(
     "retry:500\n\n" +
     "event:watcher_count\n" +
     `data:${watcherCount}\n\n`
   );
-  
+
   let lastStrokeId = 0;
   if (ctx.headers['last-event-id']) {
     lastStrokeId = parseInt(ctx.headers['last-event-id']);
   }
-  
+
   await new Promise((resolve, reject) => {
     let loop = 6;
     const interval = async () => {
@@ -344,7 +344,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
         const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
           return stroke.id
         })) : [];
-        
+
         let pointsBuffer = {};
         for (const point of points) {
           if (!pointsBuffer[point.stroke_id]) {
@@ -352,7 +352,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
           }
           pointsBuffer[point.stroke_id].push(point);
         }
-        
+
         for (const stroke of strokes) {
           stroke.points = pointsBuffer[stroke.id];
           ctx.body.write(
@@ -362,7 +362,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
           );
           lastStrokeId = stroke.id;
         }
-        
+
         await updateRoomWatcher(dbh, room.id, token.id);
         const newWatcherCount = await getWatcherCount(dbh, room.id);
         if (newWatcherCount !== watcherCount) {
@@ -372,7 +372,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
             `data:${watcherCount}\n\n`
           );
         }
-        
+
         if (loop === 0) {
           resolve();
         } else {
@@ -401,29 +401,30 @@ const writeRoomSvg = (room) => {
     '<?xml version="1.0" standalone="no"?>' +
     '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
     svg;
-  
-  new Promise((resolve, reject) => {
-    fs.writeFile(path.join(__dirname, './public/img/' + json.id), body, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
 
-  new Promise((resolve, reject) => {
-    zlib.gzip(body, (err, binary) => {
-      if (err) reject(err);
-      else
-        fs.writeFile(path.join(__dirname, './public/img/' + json.id + '.gz'), binary, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
+  return Promise.all([
+    new Promise((resolve, reject) => {
+      fs.writeFile(path.join(__dirname, '../react/public/img/' + json.id), body, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    }),
+    new Promise((resolve, reject) => {
+      zlib.gzip(body, (err, binary) => {
+        if (err) reject(err);
+        else
+          fs.writeFile(path.join(__dirname, '../react/public/img/' + json.id + '.gz'), binary, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+      })
     })
-  });
+  ]);
 };
 
 router.post('/api/strokes/rooms/:id', async (ctx, next) => {
   const dbh = await getDBH(ctx);
-  
+
   let token;
   try {
     token = await checkToken(dbh, ctx.headers['x-csrf-token']);
@@ -437,7 +438,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
       throw e;
     }
   }
-  
+
   const room = await getRoom(dbh, ctx.params.id);
   if (typeof room === 'undefined') {
     ctx.status = 400;
@@ -446,7 +447,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
     };
     return;
   }
-  
+
   if (!ctx.request.body.width || !ctx.request.body.points) {
     ctx.status = 400;
     ctx.body = {
@@ -469,7 +470,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
       return;
     }
   }
-  
+
   await dbh.query('BEGIN');
   let strokeId;
   try {
@@ -497,10 +498,10 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
       error: 'エラーが発生しました。'
     };
   }
-  
+
   const jammedRoom = await getJammedRoom(dbh, ctx.params.id);
   await writeRoomSvg(jammedRoom);
-  
+
   let sql = 'SELECT `id`, `room_id`, `width`, `red`, `green`, `blue`, `alpha`, `created_at` FROM `strokes`';
   sql += ' WHERE `id` = ?';
   const stroke = await selectOne(dbh, sql, [strokeId]);
@@ -508,7 +509,7 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
   ctx.body = {
     stroke: typeCastStrokeData(stroke)
   };
-  
+
 });
 
 app.use(router.routes());
