@@ -8,6 +8,7 @@ import zlib from 'zlib';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Canvas from './components/Canvas';
+import redis from 'redis';
 
 import convert from 'koa-convert';
 import logger from 'koa-logger';
@@ -277,7 +278,7 @@ router.post('/api/rooms', async (ctx, next) => {
   }
 
   const room = await getRoom(dbh, roomId);
-
+  
   ctx.body = {
     room: typeCastRoomData(room),
   };
@@ -325,7 +326,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
   let watcherCount = await getWatcherCount(dbh, room.id);
 
   ctx.body.write(
-    "retry:500\n\n" +
+    "retry:1000\n\n" +
     "event:watcher_count\n" +
     `data:${watcherCount}\n\n`
   );
@@ -335,57 +336,51 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
     lastStrokeId = parseInt(ctx.headers['last-event-id']);
   }
 
-  await new Promise((resolve, reject) => {
-    let loop = 6;
-    const interval = async () => {
-      try {
-        loop--;
-        const strokes = await getStrokes(dbh, [room.id], lastStrokeId);
-        const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
-          return stroke.id
-        })) : [];
-
-        let pointsBuffer = {};
-        for (const point of points) {
-          if (!pointsBuffer[point.stroke_id]) {
-            pointsBuffer[point.stroke_id] = [];
-          }
-          pointsBuffer[point.stroke_id].push(point);
-        }
-
-        for (const stroke of strokes) {
-          stroke.points = pointsBuffer[stroke.id];
-          ctx.body.write(
-            `id:${stroke.id}\n\n` +
-            "event:stroke\n" +
-            `data:${JSON.stringify(typeCastStrokeData(stroke))}\n\n`
-          );
-          lastStrokeId = stroke.id;
-        }
-
-        await updateRoomWatcher(dbh, room.id, token.id);
-        const newWatcherCount = await getWatcherCount(dbh, room.id);
-        if (newWatcherCount !== watcherCount) {
-          watcherCount = newWatcherCount;
-          ctx.body.write(
-            "event:watcher_count\n" +
-            `data:${watcherCount}\n\n`
-          );
-        }
-
-        if (loop === 0) {
-          resolve();
-        } else {
-          intervalId = setTimeout(interval, 500);
-        }
-      } catch (e) {
-        console.error(e);
-        reject(e);
+  const redis_host = process.env.REDIS_HOST || 'localhost';
+  const subscriber = redis.createClient(6379, redis_host);
+  
+  const sendStroke = async () => {
+    const strokes = await getStrokes(dbh, [room.id], lastStrokeId);
+    const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
+      return stroke.id
+    })) : [];
+  
+    let pointsBuffer = {};
+    for (const point of points) {
+      if (!pointsBuffer[point.stroke_id]) {
+        pointsBuffer[point.stroke_id] = [];
       }
-    };
-    let intervalId = setTimeout(interval, 500);
-  });
-  ctx.body.end();
+      pointsBuffer[point.stroke_id].push(point);
+    }
+  
+    for (const stroke of strokes) {
+      stroke.points = pointsBuffer[stroke.id];
+      ctx.body.write(
+        `id:${stroke.id}\n\n` +
+        "event:stroke\n" +
+        `data:${JSON.stringify(typeCastStrokeData(stroke))}\n\n`
+      );
+      lastStrokeId = stroke.id;
+    }
+  
+    await updateRoomWatcher(dbh, room.id, token.id);
+    const newWatcherCount = await getWatcherCount(dbh, room.id);
+    if (newWatcherCount !== watcherCount) {
+      watcherCount = newWatcherCount;
+      ctx.body.write(
+        "event:watcher_count\n" +
+        `data:${watcherCount}\n\n`
+      );
+    }
+  };
+  
+  await sendStroke();
+  subscriber.on('message', sendStroke);
+  subscriber.subscribe(`/rooms/${room.id}`);
+  
+  setTimeout(() => {
+    ctx.body.end();
+  }, 1000);
 });
 
 const writeRoomSvg = (room) => {
@@ -506,6 +501,12 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
   sql += ' WHERE `id` = ?';
   const stroke = await selectOne(dbh, sql, [strokeId]);
   stroke.points = await getStrokePoints(dbh, [strokeId]);
+  
+  const redis_host = process.env.REDIS_HOST || 'localhost';
+  const publisher = redis.createClient(6379, redis_host);
+  
+  publisher.publish(`/rooms/${room.id}`, JSON.stringify(stroke));
+  
   ctx.body = {
     stroke: typeCastStrokeData(stroke)
   };
