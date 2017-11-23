@@ -38,6 +38,12 @@ const getDBH = (ctx) => {
   });
 };
 
+const getCacheH = () => {
+  const redis_host = process.env.REDIS_HOST || 'localhost';
+  const redis_port = process.env.REDIS_PORT || 6379;
+  return redis.createClient(redis_port, redis_host);
+};
+
 const selectOne = async (dbh, sql, params = []) => {
   const result = await dbh.query(sql, params);
   return result[0];
@@ -278,7 +284,7 @@ router.post('/api/rooms', async (ctx, next) => {
   }
 
   const room = await getRoom(dbh, roomId);
-  
+
   ctx.body = {
     room: typeCastRoomData(room),
   };
@@ -336,15 +342,14 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
     lastStrokeId = parseInt(ctx.headers['last-event-id']);
   }
 
-  const redis_host = process.env.REDIS_HOST || 'localhost';
-  const subscriber = redis.createClient(6379, redis_host);
-  
+  const subscriber = getCacheH();
+
   const sendStroke = async () => {
     const strokes = await getStrokes(dbh, [room.id], lastStrokeId);
     const points = strokes.length >0 ? await getStrokePoints(dbh, strokes.map((stroke) => {
       return stroke.id
     })) : [];
-  
+
     let pointsBuffer = {};
     for (const point of points) {
       if (!pointsBuffer[point.stroke_id]) {
@@ -352,7 +357,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
       }
       pointsBuffer[point.stroke_id].push(point);
     }
-  
+
     for (const stroke of strokes) {
       stroke.points = pointsBuffer[stroke.id];
       ctx.body.write(
@@ -362,7 +367,7 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
       );
       lastStrokeId = stroke.id;
     }
-  
+
     await updateRoomWatcher(dbh, room.id, token.id);
     const newWatcherCount = await getWatcherCount(dbh, room.id);
     if (newWatcherCount !== watcherCount) {
@@ -373,11 +378,11 @@ router.get('/api/stream/rooms/:id', async (ctx, next) => {
       );
     }
   };
-  
+
   await sendStroke();
   subscriber.on('message', sendStroke);
   subscriber.subscribe(`/rooms/${room.id}`);
-  
+
   setTimeout(() => {
     ctx.body.end();
   }, 1000);
@@ -501,12 +506,11 @@ router.post('/api/strokes/rooms/:id', async (ctx, next) => {
   sql += ' WHERE `id` = ?';
   const stroke = await selectOne(dbh, sql, [strokeId]);
   stroke.points = await getStrokePoints(dbh, [strokeId]);
-  
-  const redis_host = process.env.REDIS_HOST || 'localhost';
-  const publisher = redis.createClient(6379, redis_host);
-  
+
+  const publisher = getCacheH();
+
   publisher.publish(`/rooms/${room.id}`, JSON.stringify(stroke));
-  
+
   ctx.body = {
     stroke: typeCastStrokeData(stroke)
   };
